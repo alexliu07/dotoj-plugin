@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-plugin/
+dotoj-plugin/
 ├─ package.json          扩展清单：贡献点（视图容器/命令/菜单/快捷键/配置）、版本、入口
 ├─ src/
 │  ├─ extension.js       activate/deactivate：树视图、登录、提交轮询、题面视图、下载、状态栏
