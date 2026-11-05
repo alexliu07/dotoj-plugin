@@ -28,8 +28,7 @@ function activate(context) {
   };
 
   const config = () => vscode.workspace.getConfiguration('dotoj');
-  const DEFAULT_SERVER = 'http://njuoj.skylare.me:9036';
-  const baseUrl = () => String(config().get('baseUrl', DEFAULT_SERVER) || DEFAULT_SERVER).replace(/\/+$/, '');
+  const baseUrl = () => String(config().get('baseUrl', '') || '').trim().replace(/\/+$/, '');
   const tokenKeyFor = (url) => TOKEN_KEY + ':' + String(url || '').replace(/\/+$/, '').toLowerCase();
   const pollInterval = () => Math.max(200, Number(config().get('pollIntervalMs', 800)) || 800);
 
@@ -104,6 +103,9 @@ function activate(context) {
     onDidChangeTreeData: treeEmitter.event,
     getTreeItem: (item) => item,
     getChildren: async (element) => {
+      if (!baseUrl()) {
+        return [new ActionItem('设置服务器地址…', 'dotoj.switchServer', 'server-environment')];
+      }
       if (!state.token) {
         return [new ActionItem('登录 dotOJ…', 'dotoj.login', 'account')];
       }
@@ -183,7 +185,11 @@ function activate(context) {
 
   function updateStatusBar() {
     const problem = currentProblem();
-    if (!state.token) {
+    if (!baseUrl()) {
+      statusBar.text = '$(server-environment) dotOJ 设置服务器';
+      statusBar.command = 'dotoj.switchServer';
+      statusBar.tooltip = '还没有配置 dotOJ 服务器，点击设置';
+    } else if (!state.token) {
       statusBar.text = '$(account) dotOJ 登录';
       statusBar.command = 'dotoj.login';
       statusBar.tooltip = '登录 dotOJ';
@@ -231,6 +237,9 @@ function activate(context) {
   // --------------------------------------------------------------- login
 
   async function login() {
+    if (!(await ensureServer())) {
+      return;
+    }
     const username = await vscode.window.showInputBox({
       title: '登录 dotOJ',
       prompt: '用户名 / 学号',
@@ -271,6 +280,9 @@ function activate(context) {
   }
 
   async function loginWithToken() {
+    if (!(await ensureServer())) {
+      return;
+    }
     const token = await vscode.window.showInputBox({
       title: '使用 Token 登录 dotOJ',
       prompt: '粘贴 token（浏览器 localStorage 里 dotoj-auth 的 token 字段）',
@@ -495,6 +507,9 @@ function activate(context) {
 
   async function openProblem(problemId) {
     try {
+      if (!(await ensureServer())) {
+        return;
+      }
       if (!state.token) {
         await login();
       }
@@ -587,6 +602,9 @@ function activate(context) {
   }
 
   async function submit(argument) {
+    if (!(await ensureServer())) {
+      return;
+    }
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showWarningMessage('dotOJ：请先打开要提交的代码文件。');
@@ -772,6 +790,9 @@ function activate(context) {
   }
 
   async function downloadProblem(argument) {
+    if (!(await ensureServer())) {
+      return;
+    }
     if (!state.token) {
       await login();
     }
@@ -854,11 +875,60 @@ function activate(context) {
 
   function updateTreeDescription() {
     try {
-      treeView.description = baseUrl().replace(/^https?:\/\//, '');
-      treeView.tooltip = '当前服务器：' + baseUrl();
+      const url = baseUrl();
+      treeView.description = url ? url.replace(/^https?:\/\//, '') : '未设置服务器';
+      treeView.tooltip = url ? '当前服务器：' + url : '点击设置 dotOJ 服务器';
     } catch (error) {
       // purely cosmetic
     }
+  }
+
+  function validateServerUrl(value) {
+    try {
+      const parsed = new URL(String(value || '').trim());
+      return /^https?:$/.test(parsed.protocol) ? '' : '地址必须以 http:// 或 https:// 开头';
+    } catch (error) {
+      return '地址格式不正确';
+    }
+  }
+
+  async function promptServerUrl() {
+    const value = await vscode.window.showInputBox({
+      title: '设置 dotOJ 服务器',
+      prompt: '输入 dotOJ 服务器地址，例如 http://njuoj.example.com:9036',
+      value: 'http://',
+      ignoreFocusOut: true,
+      validateInput: validateServerUrl,
+    });
+    if (!value) {
+      return undefined;
+    }
+    return String(value).trim().replace(/\/+$/, '');
+  }
+
+  async function rememberServer(url, name) {
+    const list = (config().get('servers', []) || []).slice();
+    const exists = list.some(
+      (item) => item && String(item.url || '').replace(/\/+$/, '').toLowerCase() === url.toLowerCase()
+    );
+    if (exists) {
+      return;
+    }
+    list.push({ name: name || url.replace(/^https?:\/\//, ''), url });
+    await persistSetting('servers', list);
+  }
+
+  async function ensureServer() {
+    if (baseUrl()) {
+      return true;
+    }
+    const url = await promptServerUrl();
+    if (!url) {
+      return false;
+    }
+    await persistSetting('baseUrl', url);
+    await rememberServer(url);
+    return true;
   }
 
   function configuredServers() {
@@ -878,7 +948,7 @@ function activate(context) {
       result.push({ name: String(item.name || url), url });
     }
     const current = baseUrl();
-    if (!seen.has(current.toLowerCase())) {
+    if (current && !seen.has(current.toLowerCase())) {
       result.unshift({ name: current.replace(/^https?:\/\//, ''), url: current });
     }
     return result;
@@ -903,24 +973,11 @@ function activate(context) {
     if (!name) {
       return undefined;
     }
-    const url = await vscode.window.showInputBox({
-      title: '添加 dotOJ 服务器',
-      prompt: '服务器地址，例如 http://njuoj.example.com:9036',
-      value: 'http://',
-      ignoreFocusOut: true,
-      validateInput: (value) => {
-        try {
-          const parsed = new URL(String(value || '').trim());
-          return /^https?:$/.test(parsed.protocol) ? '' : '地址必须以 http:// 或 https:// 开头';
-        } catch (error) {
-          return '地址格式不正确';
-        }
-      },
-    });
+    const url = await promptServerUrl();
     if (!url) {
       return undefined;
     }
-    const normalized = String(url).trim().replace(/\/+$/, '');
+    const normalized = url;
     const list = (config().get('servers', []) || []).slice();
     list.push({ name: String(name).trim(), url: normalized });
     await persistSetting('servers', list);
@@ -928,6 +985,16 @@ function activate(context) {
   }
 
   async function switchServer() {
+    if (!baseUrl() && configuredServers().length === 0) {
+      const url = await promptServerUrl();
+      if (!url) {
+        return;
+      }
+      await persistSetting('baseUrl', url);
+      await rememberServer(url);
+      vscode.window.showInformationMessage('已设置服务器：' + url);
+      return;
+    }
     const items = configuredServers().map((server) => ({
       label: server.name,
       description: server.url,
@@ -990,6 +1057,10 @@ function activate(context) {
       vscode.window.showInformationMessage('当前题目：' + problem.title);
     }),
     vscode.commands.registerCommand('dotoj.openInBrowser', (argument) => {
+      if (!baseUrl()) {
+        vscode.window.showWarningMessage('dotOJ：请先设置服务器地址。');
+        return;
+      }
       const item = argument;
       const problem = problemFromArg(item);
       const url = problem
@@ -1022,14 +1093,18 @@ function activate(context) {
 
   activeApi = { client, state, refresh, updateStatusBar };
 
-  context.secrets.get(tokenKeyFor(baseUrl())).then((token) => {
-    state.token = token || undefined;
-    setSignedIn(!!state.token);
-    if (state.token) {
-      treeEmitter.fire();
-    }
+  if (baseUrl()) {
+    context.secrets.get(tokenKeyFor(baseUrl())).then((token) => {
+      state.token = token || undefined;
+      setSignedIn(!!state.token);
+      if (state.token) {
+        treeEmitter.fire();
+      }
+      updateStatusBar();
+    });
+  } else {
     updateStatusBar();
-  });
+  }
 
   updateStatusBar();
 }

@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
@@ -202,8 +202,8 @@
       "properties": {
         "dotoj.baseUrl": {
           "type": "string",
-          "default": "http://njuoj.skylare.me:9036",
-          "description": "当前 dotOJ 服务器地址。用 `dotOJ: 切换服务器` 可以在多个服务器之间切换。"
+          "default": "",
+          "description": "当前 dotOJ 服务器地址。留空时首次使用会提示输入；已保存的服务器可用 `dotOJ: 切换服务器` 管理。"
         },
         "dotoj.pollIntervalMs": {
           "type": "number",
