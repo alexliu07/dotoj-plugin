@@ -10,6 +10,7 @@
 - **实时评测**：提交后自动轮询，进度显示在通知里，结束弹出 AC / WA / TLE / CE 等结果与分数、耗时、内存。
 - **编译信息**：CE / RE 时把编译器或运行器输出（去掉 ANSI 颜色）写进 `dotOJ` 输出面板。
 - **文件 ↔ 题目绑定**：同一个文件下次提交会自动记住上一次选的题目。
+- **多服务器**：任何用 dotOJ 后端的 OJ 都能用。`dotOJ: 切换服务器` 里可以保存多个地址（名字 + URL），一键切换；每个服务器的登录状态分开保存，切回去不用重新登录。
 - **下载题面**：一键把题面存成 Markdown，默认落在当前文件同级目录，文件名用题目的英文名（如 `gcd.md`）；题目预览页顶部也有一键下载按钮。
 
 ## 安装
@@ -22,6 +23,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 
 ## 使用
 
+0. 第一次用先确认服务器：`dotOJ: 切换服务器` → 选已有地址，或「添加服务器…」输入 `http://你的oj:端口`。
 1. 点侧边栏 dotOJ 图标 → 「登录 dotOJ…」，输入学号和密码（密码只存在 VS Code 的 SecretStorage 里）。
    也可以用 `dotOJ: 使用 Token 登录` 粘贴浏览器里 `localStorage` 的 `dotoj-auth` token。
 2. 展开竞赛 → 点击题目，题面出现在右侧「题目」面板（会同时把它设为「当前题目」，状态栏显示题目名）。左侧编辑器不受影响。
@@ -38,6 +40,8 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 | `dotOJ: 使用 Token 登录` | 粘贴 token（免密码） |
 | `dotOJ: 退出登录` | 清除本地保存的 token |
 | `dotOJ: 刷新` | 重新拉取竞赛和题目 |
+| `dotOJ: 切换服务器` | 在已保存的多个 dotOJ 服务器间切换 / 新增 |
+| `dotOJ: 添加服务器` | 直接新增一个服务器地址 |
 | `dotOJ: 打开题目` | 选择题目并打开预览 |
 | `dotOJ: 提交当前文件` | 提交当前编辑器内容 |
 | `dotOJ: 下载题面` | 把当前题面保存为 Markdown |
@@ -51,7 +55,8 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `dotoj.baseUrl` | `http://njuoj.skylare.me:9036` | OJ 地址 |
+| `dotoj.baseUrl` | `http://njuoj.skylare.me:9036` | 当前服务器地址（切换服务器会改它） |
+| `dotoj.servers` | `[]` | 已保存的服务器列表 `[{name, url}]`，由切换服务器命令维护 |
 | `dotoj.pollIntervalMs` | `800` | 评测结果轮询间隔 |
 | `dotoj.requestTimeoutMs` | `20000` | 单次请求超时 |
 | `dotoj.downloadDirectory` | 空 | 题面保存目录；留空 = 当前文件所在目录，没有打开文件时用工作区根目录 |
@@ -72,7 +77,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 | 轮询 | `GET /api/v2/submission/{id}`（`verdict` 0/1/2 表示未结束） |
 | 编译信息 | `GET /api/v2/submission/{id}/detail`（`message` 为 base64 + ANSI） |
 
-鉴权用 `Authorization: Bearer <token>`。
+鉴权用 `Authorization: Bearer <token>`。token 按服务器分开存（`dotoj.token:<url>`），所以多个 OJ 之间切换不会互相顶掉登录态。
 
 ## 已知限制
 

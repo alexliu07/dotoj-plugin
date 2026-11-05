@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
@@ -33,7 +33,9 @@
     "onCommand:dotoj.openInBrowser",
     "onCommand:dotoj.showOutput",
     "onCommand:dotoj.downloadProblem",
-    "onView:dotoj.problemView"
+    "onView:dotoj.problemView",
+    "onCommand:dotoj.switchServer",
+    "onCommand:dotoj.addServer"
   ],
   "contributes": {
     "viewsContainers": {
@@ -90,6 +92,17 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "dotoj.switchServer",
+        "title": "切换服务器",
+        "category": "dotOJ",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "dotoj.addServer",
+        "title": "添加服务器",
+        "category": "dotOJ"
+      },
+      {
         "command": "dotoj.openProblem",
         "title": "打开题目",
         "category": "dotOJ"
@@ -128,6 +141,11 @@
       "view/title": [
         {
           "command": "dotoj.refresh",
+          "when": "view == dotoj.contests",
+          "group": "navigation"
+        },
+        {
+          "command": "dotoj.switchServer",
           "when": "view == dotoj.contests",
           "group": "navigation"
         },
@@ -185,7 +203,7 @@
         "dotoj.baseUrl": {
           "type": "string",
           "default": "http://njuoj.skylare.me:9036",
-          "description": "OJ 的地址（不要以 / 结尾）。"
+          "description": "当前 dotOJ 服务器地址。用 `dotOJ: 切换服务器` 可以在多个服务器之间切换。"
         },
         "dotoj.pollIntervalMs": {
           "type": "number",
@@ -208,6 +226,28 @@
           "type": "string",
           "default": "{stem}",
           "description": "下载文件名模板，可用 {stem}（题目英文名，没有则用标题）、{id}、{title}。"
+        },
+        "dotoj.servers": {
+          "type": "array",
+          "default": [],
+          "description": "已保存的 dotOJ 服务器列表，由 `dotOJ: 切换服务器` / `dotOJ: 添加服务器` 维护。",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "url"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "显示名称"
+              },
+              "url": {
+                "type": "string",
+                "description": "服务器地址，例如 http://example.com:9036"
+              }
+            }
+          }
         }
       }
     }

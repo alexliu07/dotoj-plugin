@@ -28,7 +28,9 @@ function activate(context) {
   };
 
   const config = () => vscode.workspace.getConfiguration('dotoj');
-  const baseUrl = () => String(config().get('baseUrl', 'http://njuoj.skylare.me:9036')).replace(/\/+$/, '');
+  const DEFAULT_SERVER = 'http://njuoj.skylare.me:9036';
+  const baseUrl = () => String(config().get('baseUrl', DEFAULT_SERVER) || DEFAULT_SERVER).replace(/\/+$/, '');
+  const tokenKeyFor = (url) => TOKEN_KEY + ':' + String(url || '').replace(/\/+$/, '').toLowerCase();
   const pollInterval = () => Math.max(200, Number(config().get('pollIntervalMs', 800)) || 800);
 
   const client = new DotOjClient({
@@ -134,6 +136,7 @@ function activate(context) {
 
   const treeView = vscode.window.createTreeView('dotoj.contests', { treeDataProvider: tree });
   context.subscriptions.push(treeView);
+  updateTreeDescription();
 
   // ------------------------------------------------------------- helpers
 
@@ -149,11 +152,19 @@ function activate(context) {
   }
 
   function currentProblem() {
-    return context.workspaceState.get(STATE_CURRENT);
+    const stored = context.workspaceState.get(STATE_CURRENT);
+    if (!stored) {
+      return undefined;
+    }
+    if (stored.server && stored.server !== baseUrl()) {
+      return undefined;
+    }
+    return stored;
   }
 
   function setCurrentProblem(problem) {
-    return context.workspaceState.update(STATE_CURRENT, problem || undefined).then(updateStatusBar);
+    const value = problem ? Object.assign({}, problem, { server: baseUrl() }) : undefined;
+    return context.workspaceState.update(STATE_CURRENT, value).then(updateStatusBar);
   }
 
   function fileBindings() {
@@ -163,7 +174,7 @@ function activate(context) {
   function bindFile(uri, problem) {
     const map = Object.assign({}, fileBindings());
     if (problem) {
-      map[uri.toString()] = problem;
+      map[uri.toString()] = Object.assign({}, problem, { server: baseUrl() });
     } else {
       delete map[uri.toString()];
     }
@@ -197,7 +208,7 @@ function activate(context) {
 
   async function handleUnauthorized() {
     state.token = undefined;
-    await context.secrets.delete(TOKEN_KEY);
+    await context.secrets.delete(tokenKeyFor(baseUrl()));
     setSignedIn(false);
     updateStatusBar();
     refresh();
@@ -248,7 +259,7 @@ function activate(context) {
       }
       state.token = result.token;
       state.username = result.username || username.trim();
-      await context.secrets.store(TOKEN_KEY, result.token);
+      await context.secrets.store(tokenKeyFor(baseUrl()), result.token);
       await context.globalState.update(STATE_USER, state.username);
       setSignedIn(true);
       updateStatusBar();
@@ -272,7 +283,7 @@ function activate(context) {
     state.token = token.trim();
     try {
       await client.getContests();
-      await context.secrets.store(TOKEN_KEY, state.token);
+      await context.secrets.store(tokenKeyFor(baseUrl()), state.token);
       setSignedIn(true);
       updateStatusBar();
       refresh();
@@ -285,7 +296,7 @@ function activate(context) {
 
   async function logout() {
     state.token = undefined;
-    await context.secrets.delete(TOKEN_KEY);
+    await context.secrets.delete(tokenKeyFor(baseUrl()));
     setSignedIn(false);
     refresh();
     updateStatusBar();
@@ -598,7 +609,11 @@ function activate(context) {
 
     let problem = problemFromArg(argument);
     if (!problem) {
-      problem = fileBindings()[document.uri.toString()] || currentProblem() || undefined;
+      const bound = fileBindings()[document.uri.toString()];
+      problem =
+        (bound && (!bound.server || bound.server === baseUrl()) ? bound : undefined) ||
+        currentProblem() ||
+        undefined;
     }
     if (!problem) {
       const picked = await pickProblem();
@@ -835,6 +850,120 @@ function activate(context) {
       reportError(error, '保存题面');
     }
   }
+  // ------------------------------------------------------- servers
+
+  function updateTreeDescription() {
+    try {
+      treeView.description = baseUrl().replace(/^https?:\/\//, '');
+      treeView.tooltip = '当前服务器：' + baseUrl();
+    } catch (error) {
+      // purely cosmetic
+    }
+  }
+
+  function configuredServers() {
+    const list = config().get('servers', []) || [];
+    const result = [];
+    const seen = new Set();
+    for (const item of list) {
+      if (!item || !item.url) {
+        continue;
+      }
+      const url = String(item.url).trim().replace(/\/+$/, '');
+      const key = url.toLowerCase();
+      if (!url || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      result.push({ name: String(item.name || url), url });
+    }
+    const current = baseUrl();
+    if (!seen.has(current.toLowerCase())) {
+      result.unshift({ name: current.replace(/^https?:\/\//, ''), url: current });
+    }
+    return result;
+  }
+
+  async function persistSetting(key, value) {
+    const info = config().inspect(key);
+    const jobs = [config().update(key, value, vscode.ConfigurationTarget.Global)];
+    if (info && info.workspaceValue !== undefined) {
+      jobs.push(config().update(key, value, vscode.ConfigurationTarget.Workspace));
+    }
+    await Promise.all(jobs);
+  }
+
+  async function addServer() {
+    const name = await vscode.window.showInputBox({
+      title: '添加 dotOJ 服务器',
+      prompt: '给这个服务器起个名字，例如：NJU 2026 C 语言作业',
+      ignoreFocusOut: true,
+      validateInput: (value) => (String(value || '').trim() ? '' : '名字不能为空'),
+    });
+    if (!name) {
+      return undefined;
+    }
+    const url = await vscode.window.showInputBox({
+      title: '添加 dotOJ 服务器',
+      prompt: '服务器地址，例如 http://njuoj.example.com:9036',
+      value: 'http://',
+      ignoreFocusOut: true,
+      validateInput: (value) => {
+        try {
+          const parsed = new URL(String(value || '').trim());
+          return /^https?:$/.test(parsed.protocol) ? '' : '地址必须以 http:// 或 https:// 开头';
+        } catch (error) {
+          return '地址格式不正确';
+        }
+      },
+    });
+    if (!url) {
+      return undefined;
+    }
+    const normalized = String(url).trim().replace(/\/+$/, '');
+    const list = (config().get('servers', []) || []).slice();
+    list.push({ name: String(name).trim(), url: normalized });
+    await persistSetting('servers', list);
+    return { name: String(name).trim(), url: normalized };
+  }
+
+  async function switchServer() {
+    const items = configuredServers().map((server) => ({
+      label: server.name,
+      description: server.url,
+      server,
+    }));
+    items.push({ label: '$(add) 添加服务器…', description: '输入一个新的 dotOJ 地址', server: undefined, add: true });
+    const picked = await vscode.window.showQuickPick(items, {
+      title: '切换 dotOJ 服务器',
+      placeHolder: '当前：' + baseUrl(),
+      matchOnDescription: true,
+    });
+    if (!picked) {
+      return;
+    }
+    let target = picked.server;
+    if (picked.add) {
+      target = await addServer();
+      if (!target) {
+        return;
+      }
+    }
+    if (target.url === baseUrl()) {
+      vscode.window.showInformationMessage('已经在使用 ' + target.url);
+      return;
+    }
+    await persistSetting('baseUrl', target.url);
+    vscode.window.showInformationMessage('已切换到 ' + (target.name || target.url));
+  }
+
+  async function reloadToken() {
+    const token = await context.secrets.get(tokenKeyFor(baseUrl()));
+    state.token = token || undefined;
+    setSignedIn(!!state.token);
+    updateStatusBar();
+  }
+
   // ------------------------------------------------------------- commands
 
   context.subscriptions.push(
@@ -844,6 +973,8 @@ function activate(context) {
     vscode.commands.registerCommand('dotoj.refresh', () => {
       refresh();
     }),
+    vscode.commands.registerCommand('dotoj.switchServer', switchServer),
+    vscode.commands.registerCommand('dotoj.addServer', () => addServer()),
     vscode.commands.registerCommand('dotoj.openProblem', (argument) => {
       const problem = problemFromArg(argument);
       return openProblem(problem ? problem.id : typeof argument === 'number' ? argument : undefined);
@@ -872,10 +1003,17 @@ function activate(context) {
   );
 
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((event) => {
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration('dotoj.baseUrl')) {
         state.languages = null;
+        state.contests = null;
+        state.contestDetails.clear();
+        state.problems.clear();
+        await reloadToken();
+        updateTreeDescription();
         refresh();
+      } else if (event.affectsConfiguration('dotoj.servers')) {
+        updateTreeDescription();
       }
     })
   );
@@ -884,10 +1022,10 @@ function activate(context) {
 
   activeApi = { client, state, refresh, updateStatusBar };
 
-  context.secrets.get(TOKEN_KEY).then((token) => {
-    if (token) {
-      state.token = token;
-      setSignedIn(true);
+  context.secrets.get(tokenKeyFor(baseUrl())).then((token) => {
+    state.token = token || undefined;
+    setSignedIn(!!state.token);
+    if (state.token) {
       treeEmitter.fire();
     }
     updateStatusBar();
