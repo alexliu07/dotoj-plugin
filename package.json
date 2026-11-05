@@ -1,0 +1,218 @@
+{
+  "name": "dotoj-vscode",
+  "displayName": "dotOJ",
+  "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
+  "version": "0.3.2",
+  "publisher": "dotoj-local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "oj",
+    "judge",
+    "c",
+    "algorithm"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onView:dotoj.contests",
+    "onCommand:dotoj.login",
+    "onCommand:dotoj.loginWithToken",
+    "onCommand:dotoj.logout",
+    "onCommand:dotoj.refresh",
+    "onCommand:dotoj.openProblem",
+    "onCommand:dotoj.submit",
+    "onCommand:dotoj.setCurrentProblem",
+    "onCommand:dotoj.openInBrowser",
+    "onCommand:dotoj.showOutput",
+    "onCommand:dotoj.downloadProblem",
+    "onView:dotoj.problemView"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dotoj",
+          "title": "dotOJ",
+          "icon": "media/icon.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "dotojProblemPanel",
+          "title": "题目",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dotoj": [
+        {
+          "id": "dotoj.contests",
+          "name": "竞赛与题目"
+        }
+      ],
+      "dotojProblemPanel": [
+        {
+          "id": "dotoj.problemView",
+          "name": "题目",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dotoj.login",
+        "title": "登录",
+        "category": "dotOJ"
+      },
+      {
+        "command": "dotoj.loginWithToken",
+        "title": "使用 Token 登录",
+        "category": "dotOJ"
+      },
+      {
+        "command": "dotoj.logout",
+        "title": "退出登录",
+        "category": "dotOJ"
+      },
+      {
+        "command": "dotoj.refresh",
+        "title": "刷新",
+        "category": "dotOJ",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dotoj.openProblem",
+        "title": "打开题目",
+        "category": "dotOJ"
+      },
+      {
+        "command": "dotoj.submit",
+        "title": "提交当前文件",
+        "category": "dotOJ",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "dotoj.downloadProblem",
+        "title": "下载题面",
+        "category": "dotOJ",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "dotoj.setCurrentProblem",
+        "title": "设为当前题目",
+        "category": "dotOJ",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "dotoj.openInBrowser",
+        "title": "在浏览器中打开",
+        "category": "dotOJ",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "dotoj.showOutput",
+        "title": "显示评测输出",
+        "category": "dotOJ"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dotoj.refresh",
+          "when": "view == dotoj.contests",
+          "group": "navigation"
+        },
+        {
+          "command": "dotoj.login",
+          "when": "view == dotoj.contests && !dotoj.signedIn",
+          "group": "9_account"
+        },
+        {
+          "command": "dotoj.logout",
+          "when": "view == dotoj.contests && dotoj.signedIn",
+          "group": "9_account"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dotoj.submit",
+          "when": "view == dotoj.contests && viewItem == dotoj.problem",
+          "group": "inline"
+        },
+        {
+          "command": "dotoj.downloadProblem",
+          "when": "view == dotoj.contests && viewItem == dotoj.problem",
+          "group": "1_download"
+        },
+        {
+          "command": "dotoj.setCurrentProblem",
+          "when": "view == dotoj.contests && viewItem == dotoj.problem",
+          "group": "1_pin"
+        },
+        {
+          "command": "dotoj.openInBrowser",
+          "when": "view == dotoj.contests && viewItem == dotoj.problem",
+          "group": "9_open"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "dotoj.downloadProblem",
+          "when": "editorLangId == c",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dotoj.submit",
+        "key": "ctrl+alt+j",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "dotOJ",
+      "properties": {
+        "dotoj.baseUrl": {
+          "type": "string",
+          "default": "http://njuoj.skylare.me:9036",
+          "description": "OJ 的地址（不要以 / 结尾）。"
+        },
+        "dotoj.pollIntervalMs": {
+          "type": "number",
+          "default": 800,
+          "minimum": 200,
+          "description": "提交后轮询评测结果的间隔（毫秒）。"
+        },
+        "dotoj.requestTimeoutMs": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1000,
+          "description": "单次 HTTP 请求的超时时间（毫秒）。"
+        },
+        "dotoj.downloadDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "下载题面的默认目录；留空表示保存到当前文件所在目录（没有打开文件时用工作区根目录）。"
+        },
+        "dotoj.downloadFileNameTemplate": {
+          "type": "string",
+          "default": "{stem}",
+          "description": "下载文件名模板，可用 {stem}（题目英文名，没有则用标题）、{id}、{title}。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "pack": "node scripts/pack-vsix.mjs"
+  }
+}
