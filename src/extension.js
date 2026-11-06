@@ -414,6 +414,7 @@ function activate(context) {
       '<body>',
       '<div class="toolbar">',
       '<button id="submit">提交当前文件</button>',
+      '<button id="newfile" class="secondary">新建文件</button>',
       '<button id="browser" class="secondary">在浏览器中打开</button>',
       '<button id="download" class="secondary">下载题面</button>',
       '<span class="meta">#' + problem.id + ' · ' + escapeHtml(problem.title) + '</span>',
@@ -424,6 +425,7 @@ function activate(context) {
       '<script nonce="' + nonce + '">',
       'const vscode = acquireVsCodeApi();',
       "document.getElementById('submit').addEventListener('click', () => vscode.postMessage({ type: 'submit' }));",
+      "document.getElementById('newfile').addEventListener('click', () => vscode.postMessage({ type: 'newfile' }));",
       "document.getElementById('browser').addEventListener('click', () => vscode.postMessage({ type: 'browser' }));",
       "document.getElementById('download').addEventListener('click', () => vscode.postMessage({ type: 'download' }));",
       '</script>',
@@ -449,6 +451,8 @@ function activate(context) {
       vscode.env.openExternal(vscode.Uri.parse(url));
     } else if (message.type === 'download') {
       await downloadProblem(target);
+    } else if (message.type === 'newfile') {
+      await createProblemFile(target);
     }
   }
 
@@ -787,6 +791,44 @@ function activate(context) {
       .replace(/\{title\}/g, safeFileName(problem.title));
     const cleaned = safeFileName(name) || 'problem-' + problem.id;
     return /\.md$/i.test(cleaned) ? cleaned : cleaned + '.md';
+  }
+
+  async function createProblemFile(problem) {
+    const directory = resolveDownloadDirectory();
+    if (!directory) {
+      vscode.window.showWarningMessage('dotOJ：找不到目录，请先打开一个文件或工作区。');
+      return;
+    }
+    const base = englishStem(problem.title) || safeFileName(problem.title) || 'problem-' + problem.id;
+    const fileName = base + '.c';
+    const directoryUri = vscode.Uri.file(directory);
+    const fileUri = vscode.Uri.joinPath(directoryUri, fileName);
+
+    try {
+      await vscode.workspace.fs.createDirectory(directoryUri);
+      let exists = false;
+      try {
+        await vscode.workspace.fs.stat(fileUri);
+        exists = true;
+      } catch (error) {
+        exists = false;
+      }
+      if (!exists) {
+        await vscode.workspace.fs.writeFile(fileUri, Buffer.from('', 'utf8'));
+        output.appendLine('[' + new Date().toLocaleString() + '] 新建文件：' + fileUri.fsPath);
+      } else {
+        output.appendLine('[' + new Date().toLocaleString() + '] 文件已存在，直接打开：' + fileUri.fsPath);
+      }
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(document, { preview: false });
+      await bindFile(document.uri, { id: problem.id, title: problem.title, contestId: problem.contestId });
+      await setCurrentProblem({ id: problem.id, title: problem.title, contestId: problem.contestId });
+      if (exists) {
+        vscode.window.showInformationMessage('文件已存在，已打开：' + fileName);
+      }
+    } catch (error) {
+      reportError(error, '新建文件');
+    }
   }
 
   async function downloadProblem(argument) {
