@@ -7,6 +7,7 @@ const { verdictInfo, verdictLabel, isPending, isAccepted } = require('./verdicts
 const { problemToMarkdown, decodeBase64, stripAnsi } = require('./markdown');
 
 const TOKEN_KEY = 'dotoj.token';
+const CREDENTIALS_KEY = 'dotoj.credentials';
 const STATE_USER = 'dotoj.username';
 const STATE_CURRENT = 'dotoj.currentProblem';
 const STATE_FILE_MAP = 'dotoj.fileProblemMap';
@@ -30,12 +31,14 @@ function activate(context) {
   const config = () => vscode.workspace.getConfiguration('dotoj');
   const baseUrl = () => String(config().get('baseUrl', '') || '').trim().replace(/\/+$/, '');
   const tokenKeyFor = (url) => TOKEN_KEY + ':' + String(url || '').replace(/\/+$/, '').toLowerCase();
+  const credentialsKey = () => CREDENTIALS_KEY + ':' + String(baseUrl() || '').replace(/\/+$/, '').toLowerCase();
   const pollInterval = () => Math.max(200, Number(config().get('pollIntervalMs', 800)) || 800);
 
   const client = new DotOjClient({
     getBaseUrl: baseUrl,
     getToken: () => state.token,
     getTimeout: () => Number(config().get('requestTimeoutMs', 20000)) || 20000,
+    onUnauthorized: () => onUnauthorized(),
   });
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -212,23 +215,109 @@ function activate(context) {
     return error && error.message ? error.message : String(error);
   }
 
-  async function handleUnauthorized() {
+  async function getSavedCredentials() {
+    try {
+      const raw = await context.secrets.get(credentialsKey());
+      if (!raw) {
+        return undefined;
+      }
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.username && parsed.password) {
+        return parsed;
+      }
+    } catch (error) {
+      output.appendLine('读取保存的账号失败：' + describeError(error));
+    }
+    return undefined;
+  }
+
+  async function saveCredentials(username, password) {
+    if (!config().get('rememberPassword', true)) {
+      return;
+    }
+    try {
+      await context.secrets.store(credentialsKey(), JSON.stringify({ username, password }));
+    } catch (error) {
+      output.appendLine('保存账号失败：' + describeError(error));
+    }
+  }
+
+  async function clearCredentials() {
+    try {
+      await context.secrets.delete(credentialsKey());
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  let autoLoginPromise = null;
+
+  async function tryAutoLogin() {
+    if (!baseUrl()) {
+      return false;
+    }
+    if (autoLoginPromise) {
+      return autoLoginPromise;
+    }
+    autoLoginPromise = (async () => {
+      const saved = await getSavedCredentials();
+      if (!saved) {
+        return false;
+      }
+      output.appendLine(
+        '[' + new Date().toLocaleString() + '] 登录已过期，尝试用保存的账号自动登录（' + saved.username + '）…'
+      );
+      try {
+        const result = await client.login(saved.username, saved.password);
+        if (!result || !result.token) {
+          return false;
+        }
+        state.token = result.token;
+        await context.secrets.store(tokenKeyFor(baseUrl()), result.token);
+        setSignedIn(true);
+        updateStatusBar();
+        treeEmitter.fire();
+        output.appendLine('自动登录成功。');
+        return true;
+      } catch (error) {
+        output.appendLine('自动登录失败：' + describeError(error));
+        return false;
+      }
+    })().finally(() => {
+      autoLoginPromise = null;
+    });
+    return autoLoginPromise;
+  }
+
+  async function promptRelogin() {
     state.token = undefined;
     await context.secrets.delete(tokenKeyFor(baseUrl()));
     setSignedIn(false);
     updateStatusBar();
     refresh();
-    const choice = await vscode.window.showWarningMessage('dotOJ 登录已过期，需要重新登录。', '登录');
+    const choice = await vscode.window.showWarningMessage(
+      'dotOJ 登录已过期，自动登录也失败了，请重新登录。',
+      '登录'
+    );
     if (choice === '登录') {
       await login();
+      return !!state.token;
     }
+    return false;
+  }
+
+  async function onUnauthorized() {
+    if (await tryAutoLogin()) {
+      return true;
+    }
+    return promptRelogin();
   }
 
   function reportError(error, prefix) {
     const text = (prefix ? prefix + '：' : '') + describeError(error);
     output.appendLine('[' + new Date().toLocaleString() + '] ' + text);
     if (error instanceof ApiError && error.isUnauthorized) {
-      handleUnauthorized();
+      // The client already tried to recover (saved credentials / manual login).
       return;
     }
     vscode.window.showErrorMessage('dotOJ ' + text);
@@ -270,6 +359,7 @@ function activate(context) {
       state.username = result.username || username.trim();
       await context.secrets.store(tokenKeyFor(baseUrl()), result.token);
       await context.globalState.update(STATE_USER, state.username);
+      await saveCredentials(username.trim(), password);
       setSignedIn(true);
       updateStatusBar();
       refresh();
@@ -309,6 +399,7 @@ function activate(context) {
   async function logout() {
     state.token = undefined;
     await context.secrets.delete(tokenKeyFor(baseUrl()));
+    await clearCredentials();
     setSignedIn(false);
     refresh();
     updateStatusBar();
@@ -1079,6 +1170,18 @@ function activate(context) {
     vscode.commands.registerCommand('dotoj.login', login),
     vscode.commands.registerCommand('dotoj.loginWithToken', loginWithToken),
     vscode.commands.registerCommand('dotoj.logout', logout),
+    vscode.commands.registerCommand('dotoj.forgetPassword', async () => {
+      if (!baseUrl()) {
+        vscode.window.showWarningMessage('dotOJ：还没有设置服务器。');
+        return;
+      }
+      const answer = await vscode.window.showWarningMessage('清除 ' + baseUrl() + ' 保存的账号密码？', { modal: true }, '清除');
+      if (answer !== '清除') {
+        return;
+      }
+      await clearCredentials();
+      vscode.window.showInformationMessage('已清除保存的账号密码。');
+    }),
     vscode.commands.registerCommand('dotoj.refresh', () => {
       refresh();
     }),

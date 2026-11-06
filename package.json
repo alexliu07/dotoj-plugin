@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
@@ -35,7 +35,8 @@
     "onCommand:dotoj.downloadProblem",
     "onView:dotoj.problemView",
     "onCommand:dotoj.switchServer",
-    "onCommand:dotoj.addServer"
+    "onCommand:dotoj.addServer",
+    "onCommand:dotoj.forgetPassword"
   ],
   "contributes": {
     "viewsContainers": {
@@ -83,6 +84,11 @@
       {
         "command": "dotoj.logout",
         "title": "退出登录",
+        "category": "dotOJ"
+      },
+      {
+        "command": "dotoj.forgetPassword",
+        "title": "清除已保存的密码",
         "category": "dotOJ"
       },
       {
@@ -248,6 +254,11 @@
               }
             }
           }
+        },
+        "dotoj.rememberPassword": {
+          "type": "boolean",
+          "default": true,
+          "description": "登录成功后把账号密码存入 VS Code SecretStorage（系统密钥链加密），登录过期时自动重试一次。"
         }
       }
     }

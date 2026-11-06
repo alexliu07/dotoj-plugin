@@ -26,13 +26,30 @@ class DotOjClient {
     this.getBaseUrl = options.getBaseUrl || (() => options.baseUrl || '');
     this.getToken = options.getToken || (() => undefined);
     this.getTimeout = options.getTimeout || (() => options.timeout || 20000);
+    this.onUnauthorized = options.onUnauthorized;
   }
 
   baseUrl() {
     return String(this.getBaseUrl() || '').replace(/\/+$/, '');
   }
 
-  request(method, pathname, options = {}) {
+  async request(method, pathname, options = {}) {
+    try {
+      return await this.send(method, pathname, options);
+    } catch (error) {
+      const unauthorized = error instanceof ApiError && error.isUnauthorized;
+      if (!unauthorized || options.skipAuthRetry || typeof this.onUnauthorized !== 'function') {
+        throw error;
+      }
+      const recovered = await this.onUnauthorized(error);
+      if (!recovered) {
+        throw error;
+      }
+      return this.send(method, pathname, Object.assign({}, options, { skipAuthRetry: true }));
+    }
+  }
+
+  send(method, pathname, options = {}) {
     const query = options.query;
     const body = options.body;
     const extraHeaders = options.headers || {};
@@ -122,6 +139,7 @@ class DotOjClient {
     return this.request('POST', '/api/v2/auth/login', {
       body: { username, password },
       headers: { 'X-Skip-Inject-Token': 'true' },
+      skipAuthRetry: true,
     });
   }
 

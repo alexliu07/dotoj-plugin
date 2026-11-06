@@ -11,6 +11,7 @@
 - **编译信息**：CE / RE 时把编译器或运行器输出（去掉 ANSI 颜色）写进 `dotOJ` 输出面板。
 - **文件 ↔ 题目绑定**：同一个文件下次提交会自动记住上一次选的题目。
 - **多服务器**：不绑定任何内置站点，首次使用输入地址即可。任何用 dotOJ 后端的 OJ 都能用 `dotOJ: 切换服务器` 保存多个地址（名字 + URL）一键切换；每个服务器的登录状态分开保存，切回去不用重新登录。
+- **自动续登**：密码登录成功后把账号密码存进 VS Code SecretStorage；token 过期时自动用保存的账号重登一次，成功就重试原来的请求，失败才弹窗让你重新登录。
 - **新建文件**：题面顶栏「新建文件」按题目英文名（如 `next-permutation.c`）在当前目录建一个空 `.c` 并打开；已存在则直接打开，不会覆盖。
 - **下载题面**：一键把题面存成 Markdown，默认落在当前文件同级目录，文件名用题目的英文名（如 `gcd.md`）；题目预览页顶部也有一键下载按钮。
 
@@ -40,7 +41,8 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 | --- | --- |
 | `dotOJ: 登录` | 学号 + 密码登录 |
 | `dotOJ: 使用 Token 登录` | 粘贴 token（免密码） |
-| `dotOJ: 退出登录` | 清除本地保存的 token |
+| `dotOJ: 退出登录` | 清除本地保存的 token 和账号密码 |
+| `dotOJ: 清除已保存的密码` | 只删当前服务器保存的账号密码 |
 | `dotOJ: 刷新` | 重新拉取竞赛和题目 |
 | `dotOJ: 切换服务器` | 在已保存的多个 dotOJ 服务器间切换 / 新增 |
 | `dotOJ: 添加服务器` | 直接新增一个服务器地址 |
@@ -59,6 +61,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 | --- | --- | --- |
 | `dotoj.baseUrl` | 空 | 当前服务器地址；留空时首次使用会提示输入（切换服务器会改它） |
 | `dotoj.servers` | `[]` | 已保存的服务器列表 `[{name, url}]`，由切换服务器命令维护 |
+| `dotoj.rememberPassword` | `true` | 是否保存账号密码用于自动续登 |
 | `dotoj.pollIntervalMs` | `800` | 评测结果轮询间隔 |
 | `dotoj.requestTimeoutMs` | `20000` | 单次请求超时 |
 | `dotoj.downloadDirectory` | 空 | 题面保存目录；留空 = 当前文件所在目录，没有打开文件时用工作区根目录 |
@@ -83,6 +86,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 
 ## 已知限制
 
+- 保存的密码放在 VS Code SecretStorage（Windows 上是 DPAPI 加密），不会明文写进 `settings.json`；不放心可以设 `dotoj.rememberPassword: false` 或执行 `dotOJ: 清除已保存的密码`。
 - 计分作业需要在比赛开放时间、且已报名，否则服务端会拒绝提交（插件会把服务端返回的错误原样提示）。
 - 只按扩展名自动匹配语言（`.c` → C）；其他语言会弹选择框。
 - 题目预览是只读 Webview；顶部的「提交当前文件」按钮、状态栏、命令和树右键都能提交。
