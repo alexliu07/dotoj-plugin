@@ -23,7 +23,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 
 ## 使用
 
-0. 首次使用会弹窗要求输入服务器地址（例如 `http://你的oj:端口`），填一次就会记住；之后可用 `dotOJ: 切换服务器` 管理多个地址。
+0. 首次使用会弹窗要求输入服务器地址，输入框默认填好 `https://public.oi.cpl.icu`，直接回车即可；要连别的 dotOJ 就改成对应地址。填一次就会记住，之后可用 `dotOJ: 切换服务器` 管理多个地址。
 1. 点侧边栏 dotOJ 图标 → 「登录 dotOJ…」，输入学号和密码（密码只存在 VS Code 的 SecretStorage 里）。
    也可以用 `dotOJ: 使用 Token 登录` 粘贴浏览器里 `localStorage` 的 `dotoj-auth` token。
 2. 展开竞赛 → 点击题目，题面出现在右侧「题目」面板（会同时把它设为「当前题目」，状态栏显示题目名）。左侧编辑器不受影响。

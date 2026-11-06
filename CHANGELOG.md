@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- 服务器地址输入框的示例与默认值改为 `https://public.oi.cpl.icu`。
+
 ## 0.5.0
 
 - 移除内置默认服务器 `njuoj.skylare.me`；`dotoj.baseUrl` 默认为空，首次使用（打开题目树/登录/提交）时弹窗要求输入服务器地址，输入后自动记入服务器列表。

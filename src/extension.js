@@ -895,8 +895,8 @@ function activate(context) {
   async function promptServerUrl() {
     const value = await vscode.window.showInputBox({
       title: '设置 dotOJ 服务器',
-      prompt: '输入 dotOJ 服务器地址，例如 http://njuoj.example.com:9036',
-      value: 'http://',
+      prompt: '输入 dotOJ 服务器地址，例如 https://public.oi.cpl.icu',
+      value: 'https://public.oi.cpl.icu',
       ignoreFocusOut: true,
       validateInput: validateServerUrl,
     });

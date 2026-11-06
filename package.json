@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
