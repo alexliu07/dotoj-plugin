@@ -21,6 +21,10 @@ function joinUrl(baseUrl, pathname) {
   return base + pathname;
 }
 
+function hasHeader(headers, name) {
+  return Object.keys(headers).some((key) => key.toLowerCase() === name && String(headers[key]).toLowerCase() === 'true');
+}
+
 class DotOjClient {
   constructor(options = {}) {
     this.getBaseUrl = options.getBaseUrl || (() => options.baseUrl || '');
@@ -73,7 +77,7 @@ class DotOjClient {
     const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body), 'utf8');
     const headers = Object.assign({ Accept: 'application/json' }, extraHeaders);
     const token = this.getToken();
-    if (token) {
+    if (token && !hasHeader(headers, 'x-skip-inject-token')) {
       headers.Authorization = 'Bearer ' + token;
     }
     if (payload) {

@@ -254,7 +254,7 @@ function activate(context) {
 
   async function tryAutoLogin() {
     if (!baseUrl()) {
-      return false;
+      return 'missing';
     }
     if (autoLoginPromise) {
       return autoLoginPromise;
@@ -262,7 +262,8 @@ function activate(context) {
     autoLoginPromise = (async () => {
       const saved = await getSavedCredentials();
       if (!saved) {
-        return false;
+        output.appendLine('[' + new Date().toLocaleString() + '] 没有保存该服务器的账号密码，跳过自动登录。');
+        return 'missing';
       }
       output.appendLine(
         '[' + new Date().toLocaleString() + '] 登录已过期，尝试用保存的账号自动登录（' + saved.username + '）…'
@@ -270,7 +271,7 @@ function activate(context) {
       try {
         const result = await client.login(saved.username, saved.password);
         if (!result || !result.token) {
-          return false;
+          return 'failed';
         }
         state.token = result.token;
         await context.secrets.store(tokenKeyFor(baseUrl()), result.token);
@@ -278,10 +279,10 @@ function activate(context) {
         updateStatusBar();
         treeEmitter.fire();
         output.appendLine('自动登录成功。');
-        return true;
+        return 'ok';
       } catch (error) {
         output.appendLine('自动登录失败：' + describeError(error));
-        return false;
+        return 'failed';
       }
     })().finally(() => {
       autoLoginPromise = null;
@@ -289,16 +290,17 @@ function activate(context) {
     return autoLoginPromise;
   }
 
-  async function promptRelogin() {
+  async function promptRelogin(reason) {
     state.token = undefined;
     await context.secrets.delete(tokenKeyFor(baseUrl()));
     setSignedIn(false);
     updateStatusBar();
     refresh();
-    const choice = await vscode.window.showWarningMessage(
-      'dotOJ 登录已过期，自动登录也失败了，请重新登录。',
-      '登录'
-    );
+    const message =
+      reason === 'missing'
+        ? 'dotOJ 登录已过期，且没有保存这个服务器的账号密码，请重新登录。'
+        : 'dotOJ 登录已过期，自动登录失败了，请重新登录。';
+    const choice = await vscode.window.showWarningMessage(message, '登录');
     if (choice === '登录') {
       await login();
       return !!state.token;
@@ -307,10 +309,11 @@ function activate(context) {
   }
 
   async function onUnauthorized() {
-    if (await tryAutoLogin()) {
+    const outcome = await tryAutoLogin();
+    if (outcome === 'ok') {
       return true;
     }
-    return promptRelogin();
+    return promptRelogin(outcome);
   }
 
   function reportError(error, prefix) {

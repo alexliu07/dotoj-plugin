@@ -105,6 +105,7 @@ git push origin main --tags
 
 ## 已知限制
 
+- 自动登录失败时先看「输出 → dotOJ」：会区分「没有保存该服务器的账号密码」和「登录接口返回错误」，后者一般是密码改过或服务端拒绝了旧 token。
 - 保存的密码放在 VS Code SecretStorage（Windows 上是 DPAPI 加密），不会明文写进 `settings.json`；不放心可以设 `dotoj.rememberPassword: false` 或执行 `dotOJ: 清除已保存的密码`。
 - 计分作业需要在比赛开放时间、且已报名，否则服务端会拒绝提交（插件会把服务端返回的错误原样提示）。
 - 只按扩展名自动匹配语言（`.c` → C）；其他语言会弹选择框。
