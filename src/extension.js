@@ -5,6 +5,7 @@ const vscode = require('vscode');
 const { DotOjClient, ApiError } = require('./api');
 const { verdictInfo, verdictLabel, isPending, isAccepted } = require('./verdicts');
 const { problemToMarkdown, decodeBase64, stripAnsi } = require('./markdown');
+const { runSampleTests } = require('./sampletest');
 
 const TOKEN_KEY = 'dotoj.token';
 const CREDENTIALS_KEY = 'dotoj.credentials';
@@ -50,9 +51,11 @@ function activate(context) {
   // leaves `activeTextEditor` undefined, but downloads should still land next
   // to the file that was being edited.
   let lastFileDirectory = '';
+  let lastFileUri;
   const rememberActiveEditor = (editor) => {
     if (editor && editor.document && !editor.document.isUntitled && editor.document.uri.scheme === 'file') {
       lastFileDirectory = path.dirname(editor.document.uri.fsPath);
+      lastFileUri = editor.document.uri;
     }
   };
   rememberActiveEditor(vscode.window.activeTextEditor);
@@ -479,7 +482,7 @@ function activate(context) {
     return '<pre class="raw">' + escapeHtml(markdown) + '</pre>';
   }
 
-  async function buildProblemHtml(webview, problem, markdown) {
+  async function buildProblemHtml(webview, problem, markdown, initialResults) {
     const body = await renderMarkdownHtml(markdown);
     const nonce = makeNonce();
     const katexCss = webview.asWebviewUri(
@@ -488,12 +491,15 @@ function activate(context) {
     const previewCss = webview.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, 'media', 'preview.css')
     );
+    const previewJs = webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'media', 'preview.js')
+    );
     const csp = [
       "default-src 'none'",
       'img-src ' + webview.cspSource + ' https: http: data:',
       'style-src ' + webview.cspSource + " 'unsafe-inline'",
       'font-src ' + webview.cspSource,
-      "script-src 'nonce-" + nonce + "'",
+      'script-src ' + webview.cspSource + " 'nonce-" + nonce + "'",
     ].join('; ');
 
     return [
@@ -509,20 +515,20 @@ function activate(context) {
       '<div class="toolbar">',
       '<button id="submit">提交当前文件</button>',
       '<button id="newfile" class="secondary">新建文件</button>',
-      '<button id="browser" class="secondary">在浏览器中打开</button>',
+      '<button id="sampletest" class="secondary">样例测试</button>',
       '<button id="download" class="secondary">下载题面</button>',
       '<span class="meta">#' + problem.id + ' · ' + escapeHtml(problem.title) + '</span>',
       '</div>',
+      '<section id="results" class="results" hidden></section>',
       '<main class="markdown-body">',
       body,
       '</main>',
       '<script nonce="' + nonce + '">',
-      'const vscode = acquireVsCodeApi();',
-      "document.getElementById('submit').addEventListener('click', () => vscode.postMessage({ type: 'submit' }));",
-      "document.getElementById('newfile').addEventListener('click', () => vscode.postMessage({ type: 'newfile' }));",
-      "document.getElementById('browser').addEventListener('click', () => vscode.postMessage({ type: 'browser' }));",
-      "document.getElementById('download').addEventListener('click', () => vscode.postMessage({ type: 'download' }));",
+      'window.__dotojResults = ' +
+        (initialResults ? JSON.stringify(initialResults).replace(/</g, '\\u003c') : 'null') +
+        ';',
       '</script>',
+      '<script nonce="' + nonce + '" src="' + previewJs + '"></script>',
       '</body>',
       '</html>',
     ].join('\n');
@@ -533,6 +539,7 @@ function activate(context) {
   let problemView;
   let shownProblem;
   let lastProblemHtml = '';
+  const sampleCache = new Map();
 
   async function handleProblemMessage(message, target) {
     if (!message || typeof message !== 'object' || !target) {
@@ -540,13 +547,155 @@ function activate(context) {
     }
     if (message.type === 'submit') {
       await submit(target);
-    } else if (message.type === 'browser') {
-      const url = baseUrl() + '/contest/' + target.contestId + '/problem/' + target.id;
-      vscode.env.openExternal(vscode.Uri.parse(url));
+    } else if (message.type === 'sampletest') {
+      await runSamplesFor(target);
     } else if (message.type === 'download') {
       await downloadProblem(target);
     } else if (message.type === 'newfile') {
       await createProblemFile(target);
+    }
+  }
+
+  function publishSampleState(problemId, payload) {
+    sampleCache.set(problemId, payload);
+    if (problemView) {
+      problemView.webview.postMessage({ type: 'sampleResults', payload });
+    }
+  }
+
+  async function runSamplesFor(problem) {
+    try {
+      if (!problem || !problem.id) {
+        return;
+      }
+      if (!(await ensureServer())) {
+        return;
+      }
+      let data = state.problems.get(problem.id);
+      if (!data) {
+        data = await client.getProblem(problem.id);
+        state.problems.set(problem.id, data);
+      }
+      const cases = data.sampleCases || [];
+      if (cases.length === 0) {
+        vscode.window.showWarningMessage('dotOJ：这道题没有样例。');
+        return;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      const uri = editor && editor.document ? editor.document.uri : lastFileUri;
+      if (!uri || uri.scheme !== 'file') {
+        vscode.window.showWarningMessage('dotOJ：请先打开要测试的 .c / .cpp 文件。');
+        return;
+      }
+      const ext = path.extname(uri.fsPath).toLowerCase();
+      if (!['.c', '.cpp', '.cc', '.cxx'].includes(ext)) {
+        vscode.window.showWarningMessage('dotOJ：样例测试只支持 C / C++ 源文件。');
+        return;
+      }
+
+      const document = await vscode.workspace.openTextDocument(uri);
+      if (document.isDirty) {
+        await document.save();
+      }
+
+      const samples = cases.map((item) => ({
+        input: decodeBase64(item.input),
+        output: decodeBase64(item.output),
+      }));
+
+      publishSampleState(problem.id, { state: 'running', total: samples.length });
+
+      const outcome = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: '样例测试：' + problem.title,
+          cancellable: true,
+        },
+        (progress, token) =>
+          runSampleTests({
+            sourceFile: uri.fsPath,
+            samples,
+            timeLimitMs: data.timeLimit,
+            compilerPath: config().get('compilerPath', ''),
+            compilerArgs: config().get('compilerArgs', ['-O2', '-Wall']),
+            token,
+            onProgress: (message) => {
+              progress.report({ message });
+              publishSampleState(problem.id, { state: 'running', total: samples.length, progress: message });
+            },
+          })
+      );
+
+      if (outcome.cancelled) {
+        publishSampleState(problem.id, {
+          state: 'done',
+          language: outcome.language,
+          cancelled: true,
+          items: [],
+          summary: { passed: 0, total: samples.length },
+        });
+        vscode.window.showInformationMessage('dotOJ：已取消样例测试。');
+        return;
+      }
+
+      if (!outcome.ok) {
+        publishSampleState(problem.id, {
+          state: 'done',
+          language: outcome.language,
+          compiler: outcome.compiler,
+          compileError: outcome.error,
+          output: outcome.output || '',
+          items: [],
+          summary: { passed: 0, total: samples.length },
+        });
+        output.appendLine('[' + new Date().toLocaleString() + '] 样例测试失败：' + outcome.error);
+        if (outcome.output) {
+          output.appendLine(outcome.output);
+        }
+        vscode.window
+          .showErrorMessage('dotOJ 样例测试：' + outcome.error, '查看详情')
+          .then((choice) => {
+            if (choice === '查看详情') {
+              output.show(true);
+            }
+          });
+        return;
+      }
+
+      const passed = outcome.items.filter((item) => item.status === 'pass' || item.status === 'warn').length;
+      publishSampleState(problem.id, {
+        state: 'done',
+        language: outcome.language,
+        compiler: outcome.compiler,
+        timeLimit: outcome.timeLimit,
+        items: outcome.items,
+        summary: { passed, total: outcome.items.length },
+      });
+
+      outcome.items.forEach((item) => {
+        output.appendLine(
+          '[' + new Date().toLocaleString() + '] 样例 ' + item.index + '：' + item.status +
+            '（' + item.timeMs + ' ms）' + (item.note ? ' - ' + item.note : '')
+        );
+      });
+
+      const summaryText = passed + '/' + outcome.items.length + ' 样例通过';
+      if (passed === outcome.items.length) {
+        vscode.window.showInformationMessage('dotOJ 样例测试：' + summaryText);
+      } else {
+        vscode.window.showWarningMessage('dotOJ 样例测试：' + summaryText, '查看详情').then((choice) => {
+          if (choice === '查看详情') {
+            try {
+              problemView.show(true);
+            } catch (error) {
+              vscode.commands.executeCommand('dotoj.problemView.focus');
+            }
+          }
+        });
+      }
+    } catch (error) {
+      reportError(error, '样例测试');
     }
   }
 
@@ -645,7 +794,7 @@ function activate(context) {
       }
       const view = await whenProblemViewReady(2000);
       if (view) {
-        const html = await buildProblemHtml(view.webview, problem, markdown);
+        const html = await buildProblemHtml(view.webview, problem, markdown, sampleCache.get(problem.id));
         lastProblemHtml = html;
         try {
           view.title = problem.title;
@@ -657,7 +806,7 @@ function activate(context) {
       } else {
         output.appendLine('[' + new Date().toLocaleString() + '] 题目视图未就绪，改用编辑器面板显示。');
         const panel = openFallbackPanel(problem);
-        panel.webview.html = await buildProblemHtml(panel.webview, problem, markdown);
+        panel.webview.html = await buildProblemHtml(panel.webview, problem, markdown, sampleCache.get(problem.id));
       }
       await setCurrentProblem(current);
     } catch (error) {
@@ -1187,6 +1336,19 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('dotoj.refresh', () => {
       refresh();
+    }),
+    vscode.commands.registerCommand('dotoj.sampleTest', async (argument) => {
+      let problem = problemFromArg(argument) || currentProblem();
+      if (!problem) {
+        problem = await pickProblem();
+        if (problem) {
+          problem = { id: problem.id, title: problem.title, contestId: problem.contestId };
+        }
+      }
+      if (!problem) {
+        return;
+      }
+      await runSamplesFor(problem);
     }),
     vscode.commands.registerCommand('dotoj.switchServer', switchServer),
     vscode.commands.registerCommand('dotoj.addServer', () => addServer()),

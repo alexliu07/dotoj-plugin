@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
@@ -36,7 +36,8 @@
     "onView:dotoj.problemView",
     "onCommand:dotoj.switchServer",
     "onCommand:dotoj.addServer",
-    "onCommand:dotoj.forgetPassword"
+    "onCommand:dotoj.forgetPassword",
+    "onCommand:dotoj.sampleTest"
   ],
   "contributes": {
     "viewsContainers": {
@@ -120,6 +121,12 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "dotoj.sampleTest",
+        "title": "样例测试",
+        "category": "dotOJ",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "dotoj.downloadProblem",
         "title": "下载题面",
         "category": "dotOJ",
@@ -176,6 +183,11 @@
           "command": "dotoj.downloadProblem",
           "when": "view == dotoj.contests && viewItem == dotoj.problem",
           "group": "1_download"
+        },
+        {
+          "command": "dotoj.sampleTest",
+          "when": "view == dotoj.contests && viewItem == dotoj.problem",
+          "group": "1_test"
         },
         {
           "command": "dotoj.setCurrentProblem",
@@ -259,6 +271,22 @@
           "type": "boolean",
           "default": true,
           "description": "登录成功后把账号密码存入 VS Code SecretStorage（系统密钥链加密），登录过期时自动重试一次。"
+        },
+        "dotoj.compilerPath": {
+          "type": "string",
+          "default": "",
+          "description": "编译器路径；留空按扩展名自动选 gcc（.c）或 g++（.cpp）。"
+        },
+        "dotoj.compilerArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-O2",
+            "-Wall"
+          ],
+          "description": "编译参数，例如 [\"-O2\",\"-Wall\"]。"
         }
       }
     }

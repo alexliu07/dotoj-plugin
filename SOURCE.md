@@ -11,10 +11,12 @@ dotoj-plugin/
 │  ├─ extension.js       activate/deactivate：树视图、登录、提交轮询、题面视图、下载、状态栏
 │  ├─ api.js             dotOJ HTTP 客户端（零依赖，node http/https）
 │  ├─ markdown.js        题目 JSON → Markdown（样例 base64 解码、相对图片补全）
+│  ├─ sampletest.js      样例测试：编译、运行、超时、输出比对
 │  └─ verdicts.js        verdict 码 → AC/WA/TLE/CE… 及 pending/accepted 判定
 ├─ media/
 │  ├─ icon.svg           活动栏 / 侧边栏图标
 │  ├─ preview.css        题面 Webview 样式（跟随 VS Code 主题变量）
+│  ├─ preview.js         题面 Webview 脚本：按钮与样例结果渲染
 │  └─ katex/             KaTeX 样式与字体（复制自 VS Code 内置 markdown-math）
 ├─ scripts/pack-vsix.mjs 零依赖 VSIX 打包器（自己写 ZIP）
 ├─ .vscode/launch.json   F5 启动扩展开发宿主
