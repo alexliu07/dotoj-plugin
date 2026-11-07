@@ -556,6 +556,29 @@ function activate(context) {
     }
   }
 
+  async function revealSampleResults(problemId) {
+    const id = problemId || (currentProblem() && currentProblem().id);
+    if (!id) {
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand('dotoj.problemView.focus');
+    } catch (error) {
+      // the view container may be hidden entirely
+    }
+    if (!problemView) {
+      // The panel was closed: rebuild it, cached results are injected again.
+      await openProblem(id);
+      return;
+    }
+    try {
+      problemView.show(true);
+    } catch (error) {
+      // ignore
+    }
+    problemView.webview.postMessage({ type: 'revealResults' });
+  }
+
   function publishSampleState(problemId, payload) {
     sampleCache.set(problemId, payload);
     if (problemView) {
@@ -657,7 +680,7 @@ function activate(context) {
           .showErrorMessage('dotOJ 样例测试：' + outcome.error, '查看详情')
           .then((choice) => {
             if (choice === '查看详情') {
-              output.show(true);
+              revealSampleResults(problem.id);
             }
           });
         return;
@@ -686,11 +709,7 @@ function activate(context) {
       } else {
         vscode.window.showWarningMessage('dotOJ 样例测试：' + summaryText, '查看详情').then((choice) => {
           if (choice === '查看详情') {
-            try {
-              problemView.show(true);
-            } catch (error) {
-              vscode.commands.executeCommand('dotoj.problemView.focus');
-            }
+            revealSampleResults(problem.id);
           }
         });
       }
@@ -1337,6 +1356,7 @@ function activate(context) {
     vscode.commands.registerCommand('dotoj.refresh', () => {
       refresh();
     }),
+    vscode.commands.registerCommand('dotoj.showSampleResults', (problemId) => revealSampleResults(problemId)),
     vscode.commands.registerCommand('dotoj.sampleTest', async (argument) => {
       let problem = problemFromArg(argument) || currentProblem();
       if (!problem) {

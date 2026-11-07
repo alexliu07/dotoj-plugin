@@ -2,7 +2,7 @@
   "name": "dotoj-vscode",
   "displayName": "dotOJ",
   "description": "在 VS Code 里浏览 dotOJ 的竞赛/题目，并把当前文件提交评测。",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "dotoj-local",
   "license": "MIT",
   "engines": {
@@ -37,7 +37,8 @@
     "onCommand:dotoj.switchServer",
     "onCommand:dotoj.addServer",
     "onCommand:dotoj.forgetPassword",
-    "onCommand:dotoj.sampleTest"
+    "onCommand:dotoj.sampleTest",
+    "onCommand:dotoj.showSampleResults"
   ],
   "contributes": {
     "viewsContainers": {
@@ -125,6 +126,11 @@
         "title": "样例测试",
         "category": "dotOJ",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "dotoj.showSampleResults",
+        "title": "显示样例结果",
+        "category": "dotOJ"
       },
       {
         "command": "dotoj.downloadProblem",

@@ -91,10 +91,29 @@
     box.innerHTML = html;
   }
 
+  function revealResults() {
+    const box = document.getElementById('results');
+    if (!box || box.hidden) {
+      return;
+    }
+    try {
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+      box.scrollIntoView();
+    }
+    box.classList.add('flash');
+    setTimeout(() => box.classList.remove('flash'), 1200);
+  }
+
   window.addEventListener('message', (event) => {
     const data = event.data;
-    if (data && data.type === 'sampleResults') {
+    if (!data) {
+      return;
+    }
+    if (data.type === 'sampleResults') {
       render(data.payload);
+    } else if (data.type === 'revealResults') {
+      revealResults();
     }
   });
 
