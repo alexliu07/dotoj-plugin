@@ -84,6 +84,25 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 
 鉴权用 `Authorization: Bearer <token>`。token 按服务器分开存（`dotoj.token:<url>`），所以多个 OJ 之间切换不会互相顶掉登录态。
 
+## CI / 发布
+
+仓库带了 GitHub Actions 工作流 [`.github/workflows/build.yml`](.github/workflows/build.yml)：
+
+| 触发 | 做什么 |
+| --- | --- |
+| push 到 `main` / PR / 手动触发 | `node --check` 语法检查 → `node scripts/pack-vsix.mjs` 打包 → 上传 artifact `dotoj-vsix` |
+| push tag `v*` | 额外校验 tag 与 `package.json` 版本一致，然后创建 GitHub Release 并附上 VSIX |
+
+发版：
+
+```bash
+# 改完 package.json 的 version 后
+git tag v0.7.0
+git push origin main --tags
+```
+
+工作流不需要 `npm install` —— 打包脚本零依赖。
+
 ## 已知限制
 
 - 保存的密码放在 VS Code SecretStorage（Windows 上是 DPAPI 加密），不会明文写进 `settings.json`；不放心可以设 `dotoj.rememberPassword: false` 或执行 `dotOJ: 清除已保存的密码`。

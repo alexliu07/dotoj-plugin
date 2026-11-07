@@ -18,6 +18,7 @@ dotoj-plugin/
 │  └─ katex/             KaTeX 样式与字体（复制自 VS Code 内置 markdown-math）
 ├─ scripts/pack-vsix.mjs 零依赖 VSIX 打包器（自己写 ZIP）
 ├─ .vscode/launch.json   F5 启动扩展开发宿主
+├─ .github/workflows/    GitHub Actions：语法检查、打包、发版
 ├─ README.md             用户文档
 ├─ CHANGELOG.md          版本记录
 └─ LICENSE               MIT
