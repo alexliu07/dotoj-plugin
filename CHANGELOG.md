@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- 选择提交语言时，把该服务器上次用过的语言排在第一位并标注「上次使用」，直接回车即可。
+
 ## 0.9.0
 
 - 兼容 dotOJ 2.7（如 public.oj.cpl.icu）：样例不再内嵌在题目里，改为按 `publicTestSet` 逐条请求 `/problem/{id}/public-cases/{n}`；旧版 2.5 的 `sampleCases` 仍然支持。

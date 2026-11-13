@@ -31,7 +31,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 1. 点侧边栏 dotOJ 图标 → 「登录 dotOJ…」，输入学号和密码（密码只存在 VS Code 的 SecretStorage 里）。
    也可以用 `dotOJ: 使用 Token 登录` 粘贴浏览器里 `localStorage` 的 `dotoj-auth` token。
 2. 展开竞赛 → 点击题目，题面出现在右侧「题目」面板（会同时把它设为「当前题目」，状态栏显示题目名）。左侧编辑器不受影响。
-3. 打开你的 `xxx.c`，按 `Ctrl+Alt+J`（或点状态栏「$(cloud-upload) 题目名」）提交。
+3. 打开你的 `xxx.c`，按 `Ctrl+Alt+J`（扩展名无法确定语言时会弹列表，上次用过的语言排在最前面）（或点状态栏「$(cloud-upload) 题目名」）提交。
    如果还没选题目，会弹出题目选择框。
 4. 通知里显示评测进度，结束后弹出结果；详细编译信息在「输出 → dotOJ」里。
 5. 想开始写代码：题面顶栏点「新建文件」，会在当前目录生成以题目英文名命名的 `.c` 并自动设为该文件的题目。

@@ -7,12 +7,14 @@ const { verdictInfo, verdictLabel, isPending, isAccepted } = require('./verdicts
 const { problemToMarkdown, decodeBase64, stripAnsi } = require('./markdown');
 const { runSampleTests } = require('./sampletest');
 const { loadSamples, clearSampleCache } = require('./samples');
+const { orderLanguages } = require('./languages');
 
 const TOKEN_KEY = 'dotoj.token';
 const CREDENTIALS_KEY = 'dotoj.credentials';
 const STATE_USER = 'dotoj.username';
 const STATE_CURRENT = 'dotoj.currentProblem';
 const STATE_FILE_MAP = 'dotoj.fileProblemMap';
+const STATE_LAST_LANGUAGE = 'dotoj.lastLanguage';
 const SIGNED_IN_CONTEXT = 'dotoj.signedIn';
 
 let activeApi;
@@ -858,6 +860,20 @@ function activate(context) {
     }
   }
 
+  function lastLanguageFor(server) {
+    const map = context.globalState.get(STATE_LAST_LANGUAGE, {}) || {};
+    return map[server];
+  }
+
+  async function rememberLanguage(language) {
+    if (!language || !language.id) {
+      return;
+    }
+    const map = Object.assign({}, context.globalState.get(STATE_LAST_LANGUAGE, {}) || {});
+    map[baseUrl()] = { id: language.id, name: language.name };
+    await context.globalState.update(STATE_LAST_LANGUAGE, map);
+  }
+
   async function resolveLanguage(document) {
     const languages = await getLanguages();
     const ext = path.extname(document.fileName || '').toLowerCase();
@@ -865,9 +881,17 @@ function activate(context) {
     if (matches.length === 1) {
       return matches[0];
     }
-    const items = languages.map((item) => ({
+    const recent = lastLanguageFor(baseUrl());
+    const ordered = orderLanguages(languages, recent && recent.id);
+    const items = ordered.map((item) => ({
       label: item.name,
-      description: [item.compilerStandardName, item.compilerVersion].filter(Boolean).join(' · '),
+      description: [
+        recent && recent.id === item.id ? '上次使用' : '',
+        item.compilerStandardName,
+        item.compilerVersion,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       language: item,
     }));
     const picked = await vscode.window.showQuickPick(items, {
@@ -942,6 +966,7 @@ function activate(context) {
     if (!language) {
       return;
     }
+    await rememberLanguage(language);
 
     await bindFile(document.uri, { id: problem.id, title: problem.title, contestId: problem.contestId });
     await setCurrentProblem({ id: problem.id, title: problem.title, contestId: problem.contestId });
