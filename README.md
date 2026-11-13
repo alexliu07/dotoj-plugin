@@ -10,6 +10,7 @@
 - **实时评测**：提交后自动轮询，进度显示在通知里，结束弹出 AC / WA / TLE / CE 等结果与分数、耗时、内存。
 - **编译信息**：CE / RE 时把编译器或运行器输出（去掉 ANSI 颜色）写进 `dotOJ` 输出面板。
 - **文件 ↔ 题目绑定**：同一个文件下次提交会自动记住上一次选的题目。
+- **版本兼容**：同时支持 dotOJ 2.5（样例内嵌 base64）和 2.7+（样例走 `publicTestSet` / `public-cases` 接口）。
 - **多服务器**：不绑定任何内置站点，首次使用输入地址即可。任何用 dotOJ 后端的 OJ 都能用 `dotOJ: 切换服务器` 保存多个地址（名字 + URL）一键切换；每个服务器的登录状态分开保存，切回去不用重新登录。
 - **自动续登**：密码登录成功后把账号密码存进 VS Code SecretStorage；token 过期时自动用保存的账号重登一次，成功就重试原来的请求，失败才弹窗让你重新登录。
 - **新建文件**：题面顶栏「新建文件」按题目英文名（如 `next-permutation.c`）在当前目录建一个空 `.c` 并打开；已存在则直接打开，不会覆盖。
@@ -82,6 +83,7 @@ code --install-extension dotoj-vscode-0.1.0.vsix
 | 竞赛列表 | `GET /api/v2/contest?pageIndex=1&pageSize=100` |
 | 竞赛详情（含题目） | `GET /api/v2/contest/{id}` |
 | 题目 | `GET /api/v2/problem/{id}` |
+| 样例（2.7+） | `GET /api/v2/problem/{id}/public-cases/{n}?revision={rev}` |
 | 语言 | `GET /api/v2/application/languages` |
 | 提交 | `POST /api/v2/submission` `{problemId, program:{language, code:<base64>}}` |
 | 轮询 | `GET /api/v2/submission/{id}`（`verdict` 0/1/2 表示未结束） |

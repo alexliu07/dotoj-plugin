@@ -6,6 +6,7 @@ const { DotOjClient, ApiError } = require('./api');
 const { verdictInfo, verdictLabel, isPending, isAccepted } = require('./verdicts');
 const { problemToMarkdown, decodeBase64, stripAnsi } = require('./markdown');
 const { runSampleTests } = require('./sampletest');
+const { loadSamples, clearSampleCache } = require('./samples');
 
 const TOKEN_KEY = 'dotoj.token';
 const CREDENTIALS_KEY = 'dotoj.credentials';
@@ -87,7 +88,7 @@ function activate(context) {
   }
 
   class ProblemItem extends vscode.TreeItem {
-    constructor(problem) {
+    constructor(problem, sections) {
       super(problem.title, vscode.TreeItemCollapsibleState.None);
       this.problem = problem;
       this.id = 'problem:' + problem.id;
@@ -95,12 +96,24 @@ function activate(context) {
       this.iconPath = problem.solved
         ? new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('testing.iconPassed'))
         : new vscode.ThemeIcon('symbol-method');
-      this.description = problem.section || '';
+      const sectionName =
+        problem.section || (problem.sectionId && sections ? sections.get(problem.sectionId) : '') || '';
+      this.description = sectionName;
       this.tooltip = new vscode.MarkdownString(
         '**' + problem.title + '**\n\n#' + problem.id + (problem.section ? ' · ' + problem.section : '')
       );
       this.command = { command: 'dotoj.openProblem', title: '打开题目', arguments: [problem.id] };
     }
+  }
+
+  function sectionNames(detail) {
+    const map = new Map();
+    for (const section of (detail && detail.sections) || []) {
+      if (section && section.id) {
+        map.set(section.id, section.name || '');
+      }
+    }
+    return map;
   }
 
   // ---------------------------------------------------------------- tree
@@ -132,7 +145,7 @@ function activate(context) {
           if (problems.length === 0) {
             return [new ActionItem('（本次作业暂无题目）', 'dotoj.refresh', 'info')];
           }
-          return problems.map((problem) => new ProblemItem(problem));
+          return problems.map((problem) => new ProblemItem(problem, sectionNames(detail)));
         }
         return [];
       } catch (error) {
@@ -152,6 +165,7 @@ function activate(context) {
     state.contests = null;
     state.contestDetails.clear();
     state.problems.clear();
+    clearSampleCache();
     treeEmitter.fire();
   }
 
@@ -430,10 +444,13 @@ function activate(context) {
         detail = await client.getContest(contest.id);
         state.contestDetails.set(contest.id, detail);
       }
+      const sections = sectionNames(detail);
       for (const problem of detail.problems || []) {
+        const sectionName =
+          problem.section || (problem.sectionId && sections.get(problem.sectionId)) || '';
         picks.push({
           label: problem.title,
-          description: '#' + problem.id + (problem.section ? ' · ' + problem.section : ''),
+          description: '#' + problem.id + (sectionName ? ' · ' + sectionName : ''),
           detail: contest.title,
           problem,
         });
@@ -599,8 +616,14 @@ function activate(context) {
         data = await client.getProblem(problem.id);
         state.problems.set(problem.id, data);
       }
-      const cases = data.sampleCases || [];
-      if (cases.length === 0) {
+      let samples = [];
+      try {
+        samples = await loadSamples(client, data);
+      } catch (error) {
+        reportError(error, '获取样例');
+        return;
+      }
+      if (samples.length === 0) {
         vscode.window.showWarningMessage('dotOJ：这道题没有样例。');
         return;
       }
@@ -621,11 +644,6 @@ function activate(context) {
       if (document.isDirty) {
         await document.save();
       }
-
-      const samples = cases.map((item) => ({
-        input: decodeBase64(item.input),
-        output: decodeBase64(item.output),
-      }));
 
       publishSampleState(problem.id, { state: 'running', total: samples.length });
 
@@ -796,9 +814,16 @@ function activate(context) {
         state.problems.set(id, problem);
       }
       const contest = state.contestDetails.get(problem.contestId);
+      let samples = [];
+      try {
+        samples = await loadSamples(client, problem);
+      } catch (error) {
+        output.appendLine('读取样例失败：' + describeError(error));
+      }
       const markdown = problemToMarkdown(problem, {
         baseUrl: baseUrl(),
         contestTitle: contest && contest.title,
+        samples,
       });
 
       const current = { id: problem.id, title: problem.title, contestId: problem.contestId };
@@ -1199,8 +1224,8 @@ function activate(context) {
   async function promptServerUrl() {
     const value = await vscode.window.showInputBox({
       title: '设置 dotOJ 服务器',
-      prompt: '输入 dotOJ 服务器地址，例如 https://public.oi.cpl.icu',
-      value: 'https://public.oi.cpl.icu',
+      prompt: '输入 dotOJ 服务器地址，例如 https://public.oj.cpl.icu',
+      value: 'https://public.oj.cpl.icu',
       ignoreFocusOut: true,
       validateInput: validateServerUrl,
     });

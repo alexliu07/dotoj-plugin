@@ -64,15 +64,21 @@ function problemToMarkdown(problem, options = {}) {
   lines.push('## 输入格式', '', fixLinks(problem.inputFormat, baseUrl).trim(), '');
   lines.push('## 输出格式', '', fixLinks(problem.outputFormat, baseUrl).trim(), '');
 
-  const cases = problem.sampleCases || [];
+  const provided = Array.isArray(options.samples) ? options.samples : undefined;
+  const cases =
+    provided ||
+    (problem.sampleCases || []).map((item) => ({
+      input: decodeBase64(item.input),
+      output: decodeBase64(item.output),
+    }));
   if (cases.length > 0) {
     lines.push('## 样例', '');
     cases.forEach((item, index) => {
       if (cases.length > 1) {
         lines.push('### 样例 ' + (index + 1), '');
       }
-      lines.push('**输入**', '', fence(decodeBase64(item.input)), '');
-      lines.push('**输出**', '', fence(decodeBase64(item.output)), '');
+      lines.push('**输入**', '', fence(item.input), '');
+      lines.push('**输出**', '', fence(item.output), '');
     });
   }
 

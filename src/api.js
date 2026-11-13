@@ -165,6 +165,14 @@ class DotOjClient {
     return this.request('GET', '/api/v2/application/languages');
   }
 
+  // dotOJ >= 2.7 exposes samples as public test cases instead of embedding
+  // them in the problem payload.
+  getPublicCase(problemId, caseNumber, revision) {
+    return this.request('GET', '/api/v2/problem/' + problemId + '/public-cases/' + caseNumber, {
+      query: { revision },
+    });
+  }
+
   submit(problemId, languageId, code) {
     return this.request('POST', '/api/v2/submission', {
       body: {

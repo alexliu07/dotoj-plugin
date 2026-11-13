@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- 兼容 dotOJ 2.7（如 public.oj.cpl.icu）：样例不再内嵌在题目里，改为按 `publicTestSet` 逐条请求 `/problem/{id}/public-cases/{n}`；旧版 2.5 的 `sampleCases` 仍然支持。
+- 兼容新的分区结构（`sectionId`），题目列表能显示分区名。
+- 服务器地址示例修正为 `https://public.oj.cpl.icu`。
+
 ## 0.8.1
 
 - 修复样例测试「查看详情」没反应：现在会聚焦题目面板、滚动到结果区并高亮；如果面板已被关闭则重新打开并带回上次结果。
